@@ -1,0 +1,455 @@
+---
+title: "Tarea 1. Descripciones Graficas."
+Nombre: Amado Mauricio Ortega Sanchez 
+format: 
+  html:
+    grid: 
+      body-width: 950px
+editor: visual
+lang: es
+---
+
+```{r}
+#| code-fold: true
+#| warning: false
+#| message: false
+
+library(tidyverse)
+library(sf)          # Para datos espaciales
+library(viridis)     # Para paletas de colores
+library(janitor)    # Para limpiar nombres de columnas
+library(scales)     # Para mejorar ejes en gráficos
+
+```
+
+# Datos espaciales de Queretaro
+
+```{r municipios}
+#| code-fold: true
+#| fig-width: 7
+#| fig-align: center
+
+#municipios_Queretaro <- st_read("1_estadistica_descriptiva/data/22mun.shp", options = "ENCODING=LATIN1", quiet = TRUE)
+municipios_Queretaro <- st_read("data/22mun.shp", options = "ENCODING=LATIN1", quiet = TRUE)
+
+# Crear mapa de municipios de Queretaro
+mapa_municipios <- ggplot(municipios_Queretaro) +
+  geom_sf(fill = "lightgreen", color = "white", size = 0.3) +
+  labs(
+    title = "Municipios de Queretaro",
+    subtitle = paste("Total de municipios:", nrow(municipios_Queretaro)),
+    caption = "Fuente: INEGI - Marco Geoestadístico"
+  ) +
+  theme_void() +
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),
+    plot.subtitle = element_text(size = 12),
+    plot.caption = element_text(size = 10)
+  )
+
+print(mapa_municipios)
+```
+
+# Fuente de datos: INEGI
+
+Para este ejemplo, utilizaremos los datos del **Instituto Nacional de Estadística y Geografía (INEGI)** de México. Específicamente, los Censos y Conteos de Población y Vivienda disponible en:
+
+**Enlace de descarga**: https://inegi.org.mx/app/descarga/
+
+Buscar: Estado. Seleccionar: Programas \> Censos y Conteos de Población y Vivienda \> 2020 \> Indicadores 1900-2020 y descargar el archivo CSV.
+
+Extraer el archivo `cpv_valor_22.csv` y guardarlo en la carpeta `data/`.
+
+# Lectura de datos
+
+Carguemos los datos de población y vivienda para el año 2020, filtrando por algunos indicadores relevantes:
+
+-   Edad mediana
+
+-   Población total
+
+-   Porcentaje de la población derechohabiente en el IMSS
+
+-   Porcentaje de viviendas con electricidad
+
+-   Porcentaje de viviendas particulares habitadas que disponen de Internet
+
+-   Porcentaje de población de 15 años y más con escolaridad básica
+
+```{r}
+#| code-fold: true
+#| warning: false
+#| message: false
+
+
+#datos_total <- read_csv("1_estadistica_descriptiva/data/cpv_valor_22.csv", na = c("ND"))
+datos_total <- read_csv("data/cpv_valor_22.csv", na = c("ND"))
+
+datos_total <- datos_total |> filter(año == 2020)
+#table(datos_total$indicador)
+datos_seleccion <- datos_total |> 
+  filter(indicador %in% c("Edad mediana", "Población total","Porcentaje de población de 15 años y más con escolaridad básica, Porcentaje de hombres de 15 a 29 años","Promedio de hijos nacidos vivos por grupo de edad: 15-19","Porcentaje de población de 15 años y más con escolaridad básica","Porcentaje de la población de 15 a 24 años que asiste a la escuela","Porcentaje de población de 15 años y más sin escolaridad","Porcentaje de la población de 15 a 29 años con limitación en la actividad","Porcentaje de mujeres de 15 a 19 años","Población de 15 a 19 años", "Población de 6 a 14 años que sabe leer y escribi","Población con limitación en la actividad para hablar o comunicarse","Población de 8 a 14 años que sabe leer y escribir","Edad mediana hombres","Edad mediana mujeres" ),desc_municipio != "Estata,l") |> 
+  select(desc_municipio, indicador, valor)
+```
+
+Cambiamos el formato de los datos para que cada indicador sea una columna separada, facilitando el análisis posterior. Además, limpiamos los nombres de las columnas para que sean más manejables y creamos una columna `NOMGEO` para poder unir los datos espaciales con los datos de población y vivienda.
+
+```{r}
+#| code-fold: true
+#| warning: false
+#| message: false
+
+datos <- datos_seleccion |>
+    pivot_wider(names_from = indicador, values_from = valor) 
+
+datos <- datos |> 
+  clean_names() 
+
+# Corrección de nombres de municipios
+
+datos <- datos |> 
+  mutate(desc_municipio = if_else(desc_municipio == "EL Arenal", "El Arenal", desc_municipio))
+
+datos <- datos |> 
+  mutate(NOMGEO = desc_municipio)
+```
+
+# Estadísticas descriptivas
+
+Ahora que tenemos nuestros datos preparados, podemos realizar un resumen numérico de las variables cuantitativas. Para ello, utilizaremos la función `summary()` de R, que nos proporcionará un resumen estadístico de cada variable, incluyendo la media, mediana, mínimo, máximo y cuartiles. Hay que agregar las demás medidas de dispersión analizadas en clase (desviación media, varianza, rango, etc.) para cada variable cuantitativa.
+
+```{r}
+#| code-fold: true
+
+summary(datos)
+```
+
+Se unen los datos geograficos de los municipios de Queretaro con los datos de población y vivienda. Esto nos permitirá crear mapas y realizar análisis espaciales. Para preservar la integridad de los datos, utilizamos `left_join()` de `dplyr`, el primer conjunto de datos debe ser el que contenga la columna `geometry`.
+
+```{r}
+#| code-fold: true
+
+datos <- left_join(municipios_Queretaro, datos)
+```
+
+# Edad (Mediana)
+
+```{r}
+#| code-fold: true
+#| fig-width: 8
+#| fig-align: center
+
+
+ggplot(datos) +
+  geom_sf(aes(fill = edad_mediana), color = "white", size = 0.1) +
+  scale_fill_viridis_c(name = "Edad (mediana)") +
+  labs(
+    title = "Edad (mediana) de los Municipios de Querétaro",
+    caption = "Fuente: INEGI - Marco Geoestadístico"
+  ) +
+  theme_void()
+
+```
+
+A continuación, se presentan diferentes tipos de gráficos para visualizar la distribución de una sola variable cuantitativa, en este caso, la edad mediana de los municipios de Queretaro. Estos gráficos son útiles para comprender la distribución y características de la variable. En cada caso, es necesario que incluyas cómo se lleva a cabo cada gráfico y posteriormente, la interpretación de los resultados.
+
+## Histograma
+
+```{r}
+#| code-fold: true
+#| fig-width: 7
+#| fig-align: center
+
+ggplot(datos) +
+  geom_histogram(aes(edad_mediana), color="black", fill = "olivedrab", boundary=min(datos$edad_mediana), binwidth = 2) +
+  labs(
+    title = "Distribución de la Edad",
+    x = "Edad (años)", y = "Frecuencia"
+  ) +
+  theme_bw()+
+  theme(
+    legend.title = element_text(size=13, face="bold"),
+    legend.text = element_text(size=13),
+    plot.title = element_text(size=15, face="bold"),
+    plot.subtitle = element_text(size=13),
+    axis.text.x=element_text(size=12),
+    axis.text.y=element_text(size=12),
+    axis.title.x = element_text(face="bold", size=13),
+    axis.title.y = element_text(face="bold", size=13)
+  )
+
+```
+
+## Gráfica de densidad
+
+```{r}
+#| code-fold: true
+#| fig-width: 7
+#| fig-align: center
+
+ggplot(datos) +
+  geom_density(aes(edad_mediana), color="black", fill = "firebrick", alpha=0.6) +
+  labs(
+    title = "Distribución de la Edad",
+    x = "Edad (años)", y = "Densidad"
+  ) +
+  theme_bw()+
+  theme(
+    legend.title = element_text(size=13, face="bold"),
+    legend.text = element_text(size=13),
+    plot.title = element_text(size=15, face="bold"),
+    plot.subtitle = element_text(size=13),
+    axis.text.x=element_text(size=12),
+    axis.text.y=element_text(size=12),
+    axis.title.x = element_text(face="bold", size=13),
+    axis.title.y = element_text(face="bold", size=13)
+  )
+
+
+```
+
+## Boxplot
+
+```{r}
+#| code-fold: true
+#| fig-width: 7
+#| fig-align: center
+
+ggplot(data = datos, aes(x = "", y = edad_mediana)) +
+    geom_boxplot(
+    fill = "#4A90E2",           # Color de relleno
+    color = "#2C5F7A",          # Color del borde más oscuro
+    alpha = 0.8,                # Transparencia
+    outlier.color = "#E74C3C",  # Color rojo para outliers
+    outlier.size = 2.5,         # Tamaño de outliers
+    outlier.alpha = 0.7,        # Transparencia de outliers
+    width = 0.5,                # Ancho del boxplot
+    notch = TRUE,               # Muescas para intervalo de confianza
+    notchwidth = 0.7            # Ancho de las muescas
+  ) +
+  geom_jitter(alpha = 0.3, color = "#34495E", size = 1.5, width = 0.1) +
+  scale_y_continuous(breaks = pretty_breaks(n = 8), labels = function(x) paste(x, "años")) +
+  labs(title = "Distribución de la Edad (mediana)", 
+  subtitle = "Población del Estado de Queretaro",
+  y = "Edad (años)",
+  x = "")+
+  theme_bw()+
+  theme(
+    legend.title = element_text(size=13, face="bold"),
+    legend.text = element_text(size=13),
+    plot.title = element_text(size=15, face="bold"),
+    plot.subtitle = element_text(size=13),
+    axis.text.x=element_text(size=12),
+    axis.text.y=element_text(size=12),
+    axis.title.x = element_text(face="bold", size=13),
+    axis.title.y = element_text(face="bold", size=13),
+    panel.grid.major.y = element_line(color = "#ECF0F1", linewidth = 0.5,
+      linetype = "dashed"),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.background = element_rect(fill = "#FAFAFA", color = NA),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
+```
+
+## Gráfico de violín
+
+```{r}
+#| code-fold: true
+#| fig-width: 7
+#| fig-align: center
+
+ggplot(data = datos, aes(x = "", y = edad_mediana)) +
+    geom_violin(fill = "#4A90E2", color = "#2C5F7A", alpha = 0.8,
+    trim = FALSE,               # No recortar las colas
+    scale = "width", width = 0.8, linewidth = 0.8) +
+    geom_boxplot( width = 0.15, fill = "white", color = "#2C5F7A", alpha = 0.9,
+    outlier.color = "#E74C3C", outlier.size = 1.5, outlier.alpha = 0.8, notch = FALSE) +
+  stat_summary(fun = median, geom = "point", shape = 21, size = 3, fill = "white",
+  color = "#2C5F7A", stroke = 1.5) +
+  geom_jitter(alpha = 0.2, color = "#34495E", size = 0.8, width = 0.05) +
+  scale_y_continuous(breaks = pretty_breaks(n = 8), labels = function(x) paste(x, "años")) +
+  labs(title = "Distribución de la Edad (mediana)", 
+  subtitle = "Población del Estado de Queretaro",
+  y = "Edad (años)",
+  x = "")+
+  theme_bw()+
+  theme(
+    legend.title = element_text(size=13, face="bold"),
+    legend.text = element_text(size=13),
+    plot.title = element_text(size=15, face="bold"),
+    plot.subtitle = element_text(size=13),
+    axis.text.x=element_text(size=12),
+    axis.text.y=element_text(size=12),
+    axis.title.x = element_text(face="bold", size=13),
+    axis.title.y = element_text(face="bold", size=13),
+    panel.grid.major.y = element_line(color = "#ECF0F1", linewidth = 0.5,
+      linetype = "dashed"),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.background = element_rect(fill = "#FAFAFA", color = NA),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
+  
+```
+
+## Q-Q Plot (comparación de cuantiles)
+
+```{r}
+#| code-fold: true
+#| fig-width: 7
+#| fig-align: center
+
+
+# Q-Q Plot básico para normalidad
+ggplot(data = datos, aes(sample = edad_mediana)) +
+    stat_qq(color = "#4A90E2", size = 2, alpha = 0.7) +
+    stat_qq_line(color = "#E74C3C", linewidth = 1, linetype = "dashed") +
+    scale_x_continuous(name = "Cuantiles Teóricos (Distribución Normal)",
+    breaks = pretty_breaks(n = 6)) +
+    scale_y_continuous(name = "Cuantiles Muestrales (Edad mediana)",
+    breaks = pretty_breaks(n = 6),
+    labels = function(x) paste(x, "años")) +
+    labs(title = "Gráfico Q-Q para Normalidad",
+    subtitle = "Edad Mediana - Población Queretaro") +
+    theme_bw()+
+    theme(
+    legend.title = element_text(size=13, face="bold"),
+    legend.text = element_text(size=13),
+    plot.title = element_text(size=15, face="bold"),
+    plot.subtitle = element_text(size=13),
+    axis.text.x=element_text(size=12),
+    axis.text.y=element_text(size=12),
+    axis.title.x = element_text(face="bold", size=13),
+    axis.title.y = element_text(face="bold", size=13),
+    panel.grid.major.y = element_line(color = "#ECF0F1", linewidth = 0.5,
+      linetype = "dashed"),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.background = element_rect(fill = "#FAFAFA", color = NA),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
+  
+
+
+```
+
+## Dot Plot (Gráfico de puntos)
+
+```         
+```
+
+## Problema a resolver
+
+Hipotesis: En Querétaro, las personas tienden a dejar de estudiar después de los 15 años debido a factores socioeconómicos, como la necesidad de incorporarse tempranamente al mercado laboral para apoyar a la economía familiar, combinados con limitaciones en el acceso a instituciones de educación media superior en comunidades rurales y la falta de programas de apoyo suficientes que incentiven la permanencia escolar.
+
+## Poblacion de 15 a 19 años de los Municipios de Queretaro
+
+```{r}
+#| code-fold: true
+#| fig-width: 8
+#| fig-align: center
+
+
+ggplot(datos) +
+  geom_sf(aes(fill = poblacion_de_15_a_19_anos), color = "white", size = 0.1) +
+  scale_fill_viridis_c(
+    name = "poblacion_de_15_a_19_anos"
+  ) +
+  labs(
+    title = "Poblacion de 15 a 19 años de los Municipios de Queretaro",
+    caption = "Fuente: INEGI - Marco Geoestadístico"
+  ) +
+  theme_void() +
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),
+    plot.subtitle = element_text(size = 12),
+    plot.caption = element_text(size = 10),
+    legend.position = "right"
+  )
+```
+
+Como podemos ver la mayor parte de la poblacion de 15 a 19 años se encuentra en Queretaro capita, por lo que, la mayoria de los jovnes radican aqui
+
+## Porcentaje que asiste a la escuela vs. porcentaje sin escolaridad
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Barras comparando escolaridad por municipio
+ggplot(datos, aes(x = reorder(NOMGEO, porcentaje_de_la_poblacion_de_15_a_24_anos_que_asiste_a_la_escuela),
+                  y = porcentaje_de_la_poblacion_de_15_a_24_anos_que_asiste_a_la_escuela)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Asistencia escolar (15-24 años) por municipio",
+       x = "Municipio", y = "Porcentaje de asistencia escolar") +
+  theme_minimal()
+
+```
+
+Se observa que la población de 15 a 19 años se concentra principalmente en municipios urbanos, lo cual puede significar que en las zonas rurales la oferta educativa es más limitada y que, a pesar de haber menos jóvenes, enfrentan mayores obstáculos para continuar con la escuela.
+
+## **Población 15–19 años** y su relación con el **porcentaje sin escolaridad**.
+
+```{r}
+ggplot(datos, aes(x = poblacion_de_15_a_19_anos, 
+                  y = porcentaje_de_poblacion_de_15_anos_y_mas_sin_escolaridad)) +
+  geom_point(color = "tomato", size = 3) +
+  labs(title = "Relación entre población 15-19 y % sin escolaridad",
+       x = "Población de 15 a 19 años",
+       y = "% de población 15+ sin escolaridad") +
+  theme_minimal()
+
+```
+
+El porcentaje de población de 15 años y más sin escolaridad confirma que existen rezagos educativos significativos. Esto refuerza la hipótesis de que los factores socioeconómicos han limitado la permanencia en el sistema educativo después de la secundaria.
+
+## **Asistencia escolar** disminuye cuando aumenta la variable socioeconómica
+
+```{r}
+ggplot(datos, aes(x = porcentaje_de_la_poblacion_de_15_a_24_anos_que_asiste_a_la_escuela,
+                  y = porcentaje_de_poblacion_de_15_anos_y_mas_sin_escolaridad)) +
+  geom_point(aes(color = NOMGEO), size = 3) +
+  geom_smooth(method = "lm", se = FALSE, color = "black") +
+  labs(title = "Asistencia escolar vs Rezago educativo",
+       x = "% que asiste a la escuela (15-24)",
+       y = "% sin escolaridad (15+)") +
+  theme_minimal()
+
+```
+
+Los datos muestran una disminución de la asistencia escolar conforme aumenta la edad, lo que coincide con la hipótesis de que los jóvenes dejan de estudiar después de los 15 años, posiblemente para incorporarse al trabajo o por falta de acceso a instituciones de educación media superior.
+
+## **Promedio de hijos nacidos vivos (15–19)**
+
+```{r}
+ggplot(datos, aes(x = "", y = promedio_de_hijos_nacidos_vivos_por_grupo_de_edad_15_19)) +
+  geom_boxplot(fill = "orange") +
+  labs(title = "Distribución del promedio de hijos nacidos vivos (15-19)",
+       x = "", y = "Promedio de hijos") +
+  theme_minimal()
+
+```
+
+Un promedio relativamente alto de hijos nacidos vivos en mujeres adolescentes sugiere que el embarazo temprano es un factor clave de deserción escolar, lo cual limita sus oportunidades de continuar con la educación.
+
+## **Correlación entre género y asistencia escolar**
+
+```{r}
+ggplot(datos, aes(x = porcentaje_de_mujeres_de_15_a_19_anos,
+                  y = porcentaje_de_la_poblacion_de_15_a_24_anos_que_asiste_a_la_escuela)) +
+  geom_point(color = "purple", size = 3) +
+  geom_smooth(method = "lm", se = FALSE, color = "black") +
+  labs(title = "Mujeres 15-19 vs asistencia escolar (15-24)",
+       x = "% mujeres 15-19",
+       y = "% que asiste a la escuela (15-24)") +
+  theme_minimal()
+
+```
+
+El género es un factor que influye en la deserción escola**r**, pues muchas jóvenes abandonan la escuela más temprano, a menudo por embarazo adolescente, cuidado de familiares o matrimonio temprano.
+
+## **Conclusion**
+
+Cada visualización muestra distintos ángulos de la deserción escolar en Querétaro. La suma de baja asistencia escolar en jóvenes, altos porcentajes sin escolaridad, embarazo adolescente y predominio de la escolaridad básica valida la hipótesis de que después de los 15 años la permanencia educativa se ve afectada por factores socioeconómicos y de acceso. Por lo que nuestra hipotesis resulto ser cierta.
