@@ -1,0 +1,95 @@
+---
+title: "Distribucion Weibull"
+author: "Amado Mauricio Ortega Sanchez"
+format: html
+editor: visual
+---
+
+# Distribución de Weibull
+
+La distribución de Weibull es una distribución versátil que se puede utilizar para modelar una amplia gama de aplicaciones en ingeniería, investigación médica, control de calidad, finanzas y climatología. Por ejemplo, la distribución se utiliza frecuentemente con análisis de fiabilidad para modelar datos de tiempo antes de falla. La distribución de Weibull también se utiliza para modelar datos asimétricos del proceso en el análisis de capacidad.
+
+**Efecto del parámetro de forma**
+
+El parámetro de forma describe la manera en que se distribuyen los datos. Una forma de 3 se aproxima a una curva normal. Un valor de forma bajo, por ejemplo 1, da una curva con asimetría hacia la derecha. Un valor de forma alto, por ejemplo 10, da una curva con asimetría hacia la izquierda.
+
+**Efecto del parámetro de escala**
+
+:   La escala, o vida característica, es el percentil 63.2 de los datos. La escala define la posición de la curva de Weibull respecto del valor de umbral, lo cual es similar a la manera en que la media define la posición de una curva normal. Una escala de 20, por ejemplo, indica que el 63.2% de los equipos fallará en las primeras 20 horas después del tiempo umbral.
+
+**Efecto del parámetro de valor umbral**
+
+El parámetro de valor umbral describe un desplazamiento de la distribución alejándose del 0. Un valor umbral negativo desplaza la distribución hacia la izquierda, mientras que un valor umbral positivo desplaza la distribución hacia la derecha. Todos los datos deben ser mayores que el valor umbral. La distribución de Weibull de 2 parámetros es igual a la distribución de Weibull de 3 parámetros con un valor umbral de 0. Por ejemplo, la distribución de Weibull de 3 parámetros (3,100,50) tiene la misma forma y dispersión que la distribución de Weibull de 2 parámetros (3,100), pero está desplazada 50 unidades hacia la derecha.
+
+### **Ejercicio 1: Simulación y histograma**
+
+Genera 1000 observaciones de Weibull con k=2k = 2k=2 y λ=3\lambda = 3λ=3. Haz un histograma y superpone la densidad teórica.
+
+```{r}
+set.seed(123)
+
+# Parámetros
+n <- 1000
+k <- 2       # shape
+lambda <- 3  # scale
+
+# Simulación
+x <- rweibull(n, shape = k, scale = lambda)
+
+# Histograma con densidad teórica
+library(ggplot2)
+x_vals <- seq(0, max(x), length.out = 200)
+dens_teorica <- dweibull(x_vals, shape = k, scale = lambda)
+
+df <- data.frame(x = x)
+df_dens <- data.frame(x = x_vals, dens = dens_teorica)
+
+ggplot(df, aes(x = x)) +
+  geom_histogram(aes(y = ..density..), bins = 40, fill = "skyblue", color = "black", alpha = 0.6) +
+  geom_line(data = df_dens, aes(x = x, y = dens), color = "red", size = 1.2) +
+  labs(title = "Histograma de Weibull con densidad teórica",
+       x = "Valores", y = "Densidad") +
+  theme_minimal()
+
+```
+
+### **Ejercicio 2: Probabilidades y cuantil**
+
+-   Calcula P(X≤2)P(X \le 2)P(X≤2) y
+
+-   P(X>4)P(X > 4)P(X\>4).
+
+    ```{r}
+    # Probabilidades
+    p1 <- pweibull(2, shape = k, scale = lambda)
+    p2 <- 1 - pweibull(4, shape = k, scale = lambda)
+
+    cat("P(X <= 2):", round(p1, 4), "\n")
+    cat("P(X > 4):", round(p2, 4), "\n")
+
+    # Cuantil 90%
+    q90 <- qweibull(0.9, shape = k, scale = lambda)
+    cat("Cuantil 90%:", round(q90, 4), "\n")
+
+    ```
+
+### **Ejercicio 3: Simulación de tiempo de vida y media muestral**
+
+Supongamos que X representa **tiempo de vida de un componente**:
+
+```{r}
+# Media y varianza teórica
+media_teorica <- lambda * gamma(1 + 1/k)
+var_teorica <- lambda^2 * (gamma(1 + 2/k) - (gamma(1 + 1/k))^2)
+
+cat("Media teórica:", round(media_teorica,3), "\n")
+cat("Varianza teórica:", round(var_teorica,3), "\n")
+
+# Media y varianza muestral
+media_muestral <- mean(x)
+var_muestral <- var(x)
+
+cat("Media muestral:", round(media_muestral,3), "\n")
+cat("Varianza muestral:", round(var_muestral,3), "\n")
+
+```
